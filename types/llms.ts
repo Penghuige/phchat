@@ -7,6 +7,7 @@ export type LLMID =
   | MistralLLMID
   | GroqLLMID
   | PerplexityLLMID
+  | ZhipuLLMID
 
 // OpenAI Models (UPDATED 5/13/24)
 export type OpenAILLMID =
@@ -60,6 +61,11 @@ export type PerplexityLLMID =
   | "sonar-small-online" // Sonar Small Online
   | "sonar-medium-chat" // Sonar Medium Chat
   | "sonar-medium-online" // Sonar Medium Online
+
+// Zhipu Models
+export type ZhipuLLMID =
+  | "glm-4-plus" // GLM-4 Plus
+  | "glm-4v-plus-0111" // GLM-4V Plus 011
 
 export interface LLM {
   modelId: LLMID
