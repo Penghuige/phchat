@@ -8,6 +8,7 @@ export type LLMID =
   | GroqLLMID
   | PerplexityLLMID
   | ZhipuLLMID
+  | DeepSeekLLMID
 
 // OpenAI Models (UPDATED 5/13/24)
 export type OpenAILLMID =
@@ -64,8 +65,17 @@ export type PerplexityLLMID =
 
 // Zhipu Models
 export type ZhipuLLMID =
+  | "glm-4" // GLM-4
   | "glm-4-plus" // GLM-4 Plus
-  | "glm-4v-plus-0111" // GLM-4V Plus 011
+  | "glm-4v" // GLM-4V (Vision)
+  | "glm-4v-plus-0111" // GLM-4V Plus 0111
+  | "glm-3-turbo" // GLM-3-Turbo
+  | "cogview-3" // CogView-3
+
+// DeepSeek Models
+export type DeepSeekLLMID =
+  | "deepseek-chat" // DeepSeek Chat also DeepSeek-V3-0324
+  | "deepseek-reasoner" // DeepSeek reasoner
 
 export interface LLM {
   modelId: LLMID

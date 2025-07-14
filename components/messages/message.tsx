@@ -23,6 +23,7 @@ import { TextareaAutosize } from "../ui/textarea-autosize"
 import { WithTooltip } from "../ui/with-tooltip"
 import { MessageActions } from "./message-actions"
 import { MessageMarkdown } from "./message-markdown"
+import { ReasoningCollapsible } from "./reasoning-collapsible"
 
 const ICON_SIZE = 32
 
@@ -115,6 +116,42 @@ export const Message: FC<MessageProps> = ({
   const handleStartEdit = () => {
     onStartEdit(message)
   }
+
+  // 解析思考过程和答案
+  const parseReasoningAndAnswer = (content: string) => {
+    // 检查是否是DeepSeek reasoner模型的回复
+    if (message.model === "deepseek-reasoner") {
+      // 尝试匹配思考过程和答案的格式
+      const reasoningMatch = content.match(
+        /\*\*思考过程：\*\*\s*([\s\S]*?)(?=\*\*答案：\*\*|$)/
+      )
+      const answerMatch = content.match(/\*\*答案：\*\*\s*([\s\S]*?)$/)
+
+      if (reasoningMatch && answerMatch) {
+        return {
+          reasoning: reasoningMatch[1].trim(),
+          answer: answerMatch[1].trim(),
+          hasReasoning: true
+        }
+      } else if (reasoningMatch) {
+        return {
+          reasoning: reasoningMatch[1].trim(),
+          answer: content.replace(/\*\*思考过程：\*\*\s*[\s\S]*?$/, "").trim(),
+          hasReasoning: true
+        }
+      }
+    }
+
+    return {
+      reasoning: "",
+      answer: content,
+      hasReasoning: false
+    }
+  }
+
+  const { reasoning, answer, hasReasoning } = parseReasoningAndAnswer(
+    message.content
+  )
 
   useEffect(() => {
     setEditedMessage(message.content)
@@ -305,7 +342,15 @@ export const Message: FC<MessageProps> = ({
               maxRows={20}
             />
           ) : (
-            <MessageMarkdown content={message.content} />
+            <div className="space-y-4">
+              {/* 显示思考过程（如果有） */}
+              {hasReasoning && (
+                <ReasoningCollapsible reasoningContent={reasoning} />
+              )}
+
+              {/* 显示答案 */}
+              <MessageMarkdown content={answer} />
+            </div>
           )}
         </div>
 
