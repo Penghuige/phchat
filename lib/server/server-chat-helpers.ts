@@ -4,6 +4,7 @@ import { createServerClient } from "@supabase/ssr"
 import { cookies } from "next/headers"
 
 export async function getServerProfile() {
+  console.time("getServerProfile-total")
   const cookieStore = cookies()
   const supabase = createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -17,23 +18,30 @@ export async function getServerProfile() {
     }
   )
 
+  console.time("getServerProfile-auth")
   const user = (await supabase.auth.getUser()).data.user
+  console.timeEnd("getServerProfile-auth")
   if (!user) {
+    console.timeEnd("getServerProfile-total")
     throw new Error("User not found")
   }
 
+  console.time("getServerProfile-profile")
   const { data: profile } = await supabase
     .from("profiles")
     .select("*")
     .eq("user_id", user.id)
     .single()
+  console.timeEnd("getServerProfile-profile")
 
   if (!profile) {
+    console.timeEnd("getServerProfile-total")
     throw new Error("Profile not found")
   }
 
   const profileWithKeys = addApiKeysToProfile(profile)
 
+  console.timeEnd("getServerProfile-total")
   return profileWithKeys
 }
 

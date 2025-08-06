@@ -3,7 +3,22 @@ const withBundleAnalyzer = require("@next/bundle-analyzer")({
 })
 
 const withPWA = require("next-pwa")({
-  dest: "public"
+  dest: "public",
+  disable: process.env.NODE_ENV === "development",
+  register: true,
+  skipWaiting: true,
+  runtimeCaching: [
+    {
+      urlPattern: /^https?.*/,
+      handler: "NetworkFirst",
+      options: {
+        cacheName: "offlineCache",
+        expiration: {
+          maxEntries: 200
+        }
+      }
+    }
+  ]
 })
 
 module.exports = withBundleAnalyzer(
@@ -27,6 +42,11 @@ module.exports = withBundleAnalyzer(
     },
     experimental: {
       serverComponentsExternalPackages: ["sharp", "onnxruntime-node"]
+    },
+    // 添加性能优化配置
+    swcMinify: true,
+    compiler: {
+      removeConsole: process.env.NODE_ENV === "production"
     }
   })
 )

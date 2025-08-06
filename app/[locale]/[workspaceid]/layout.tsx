@@ -91,88 +91,118 @@ export default function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
   const fetchWorkspaceData = async (workspaceId: string) => {
     setLoading(true)
 
-    const workspace = await getWorkspaceById(workspaceId)
-    setSelectedWorkspace(workspace)
+    try {
+      // 并行加载所有数据
+      const [
+        workspace,
+        assistantData,
+        chats,
+        collectionData,
+        folders,
+        fileData,
+        presetData,
+        promptData,
+        toolData,
+        modelData
+      ] = await Promise.all([
+        getWorkspaceById(workspaceId),
+        getAssistantWorkspacesByWorkspaceId(workspaceId),
+        getChatsByWorkspaceId(workspaceId),
+        getCollectionWorkspacesByWorkspaceId(workspaceId),
+        getFoldersByWorkspaceId(workspaceId),
+        getFileWorkspacesByWorkspaceId(workspaceId),
+        getPresetWorkspacesByWorkspaceId(workspaceId),
+        getPromptWorkspacesByWorkspaceId(workspaceId),
+        getToolWorkspacesByWorkspaceId(workspaceId),
+        getModelWorkspacesByWorkspaceId(workspaceId)
+      ])
 
-    const assistantData = await getAssistantWorkspacesByWorkspaceId(workspaceId)
-    setAssistants(assistantData.assistants)
+      setSelectedWorkspace(workspace)
+      setAssistants(assistantData.assistants)
+      setChats(chats)
+      setCollections(collectionData.collections)
+      setFolders(folders)
+      setFiles(fileData.files)
+      setPresets(presetData.presets)
+      setPrompts(promptData.prompts)
+      setTools(toolData.tools)
+      setModels(modelData.models)
 
-    for (const assistant of assistantData.assistants) {
-      let url = ""
-
-      if (assistant.image_path) {
-        url = (await getAssistantImageFromStorage(assistant.image_path)) || ""
+      // 异步处理助手图片，不阻塞主要数据加载
+      if (assistantData.assistants.length > 0) {
+        processAssistantImages(assistantData.assistants)
       }
 
-      if (url) {
+      setChatSettings({
+        model: (searchParams.get("model") ||
+          workspace?.default_model ||
+          "gpt-4-1106-preview") as LLMID,
+        prompt:
+          workspace?.default_prompt ||
+          "You are a friendly, helpful AI assistant.",
+        temperature: workspace?.default_temperature || 0.5,
+        contextLength: workspace?.default_context_length || 4096,
+        includeProfileContext: workspace?.include_profile_context || true,
+        includeWorkspaceInstructions:
+          workspace?.include_workspace_instructions || true,
+        embeddingsProvider:
+          (workspace?.embeddings_provider as "openai" | "local") || "openai"
+      })
+    } catch (error) {
+      console.error("Error fetching workspace data:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const processAssistantImages = async (assistants: any[]) => {
+    const imagePromises = assistants.map(async assistant => {
+      if (!assistant.image_path) {
+        return {
+          assistantId: assistant.id,
+          path: assistant.image_path,
+          base64: "",
+          url: ""
+        }
+      }
+
+      try {
+        const url = await getAssistantImageFromStorage(assistant.image_path)
+        if (!url) {
+          return {
+            assistantId: assistant.id,
+            path: assistant.image_path,
+            base64: "",
+            url: ""
+          }
+        }
+
         const response = await fetch(url)
         const blob = await response.blob()
         const base64 = await convertBlobToBase64(blob)
 
-        setAssistantImages(prev => [
-          ...prev,
-          {
-            assistantId: assistant.id,
-            path: assistant.image_path,
-            base64,
-            url
-          }
-        ])
-      } else {
-        setAssistantImages(prev => [
-          ...prev,
-          {
-            assistantId: assistant.id,
-            path: assistant.image_path,
-            base64: "",
-            url
-          }
-        ])
+        return {
+          assistantId: assistant.id,
+          path: assistant.image_path,
+          base64,
+          url
+        }
+      } catch (error) {
+        console.error(
+          `Error processing image for assistant ${assistant.id}:`,
+          error
+        )
+        return {
+          assistantId: assistant.id,
+          path: assistant.image_path,
+          base64: "",
+          url: ""
+        }
       }
-    }
-
-    const chats = await getChatsByWorkspaceId(workspaceId)
-    setChats(chats)
-
-    const collectionData =
-      await getCollectionWorkspacesByWorkspaceId(workspaceId)
-    setCollections(collectionData.collections)
-
-    const folders = await getFoldersByWorkspaceId(workspaceId)
-    setFolders(folders)
-
-    const fileData = await getFileWorkspacesByWorkspaceId(workspaceId)
-    setFiles(fileData.files)
-
-    const presetData = await getPresetWorkspacesByWorkspaceId(workspaceId)
-    setPresets(presetData.presets)
-
-    const promptData = await getPromptWorkspacesByWorkspaceId(workspaceId)
-    setPrompts(promptData.prompts)
-
-    const toolData = await getToolWorkspacesByWorkspaceId(workspaceId)
-    setTools(toolData.tools)
-
-    const modelData = await getModelWorkspacesByWorkspaceId(workspaceId)
-    setModels(modelData.models)
-
-    setChatSettings({
-      model: (searchParams.get("model") ||
-        workspace?.default_model ||
-        "gpt-4-1106-preview") as LLMID,
-      prompt:
-        workspace?.default_prompt ||
-        "You are a friendly, helpful AI assistant.",
-      temperature: workspace?.default_temperature || 0.5,
-      contextLength: workspace?.default_context_length || 4096,
-      includeProfileContext: workspace?.include_profile_context || true,
-      includeWorkspaceInstructions:
-        workspace?.include_workspace_instructions || true,
-      embeddingsProvider:
-        (workspace?.embeddings_provider as "openai" | "local") || "openai"
     })
 
-    setLoading(false)
+    const images = await Promise.all(imagePromises)
+    setAssistantImages(images)
   }
 
   if (loading) {

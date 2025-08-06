@@ -31,15 +31,19 @@ export default async function Login({
       }
     }
   )
+  console.time("login-getSession")
   const session = (await supabase.auth.getSession()).data.session
+  console.timeEnd("login-getSession")
 
   if (session) {
+    console.time("login-getHomeWorkspace")
     const { data: homeWorkspace, error } = await supabase
       .from("workspaces")
       .select("*")
       .eq("user_id", session.user.id)
       .eq("is_home", true)
       .single()
+    console.timeEnd("login-getHomeWorkspace")
 
     if (!homeWorkspace) {
       throw new Error(error.message)
@@ -56,21 +60,25 @@ export default async function Login({
     const cookieStore = cookies()
     const supabase = createClient(cookieStore)
 
+    console.time("login-signInWithPassword")
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password
     })
+    console.timeEnd("login-signInWithPassword")
 
     if (error) {
       return redirect(`/login?message=${error.message}`)
     }
 
+    console.time("login-signIn-getHomeWorkspace")
     const { data: homeWorkspace, error: homeWorkspaceError } = await supabase
       .from("workspaces")
       .select("*")
       .eq("user_id", data.user.id)
       .eq("is_home", true)
       .single()
+    console.timeEnd("login-signIn-getHomeWorkspace")
 
     if (!homeWorkspace) {
       throw new Error(
