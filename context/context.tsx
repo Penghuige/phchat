@@ -48,12 +48,20 @@ interface ChatbotUIContext {
   setAvailableLocalModels: Dispatch<SetStateAction<LLM[]>>
   availableOpenRouterModels: OpenRouterLLM[]
   setAvailableOpenRouterModels: Dispatch<SetStateAction<OpenRouterLLM[]>>
+  // 新增：模型加载状态和函数
+  modelsLoaded: boolean
+  modelsLoading: boolean
+  loadModelsIfNeeded: () => Promise<void>
 
   // WORKSPACE STORE
   selectedWorkspace: Tables<"workspaces"> | null
   setSelectedWorkspace: Dispatch<SetStateAction<Tables<"workspaces"> | null>>
   workspaceImages: WorkspaceImage[]
   setWorkspaceImages: Dispatch<SetStateAction<WorkspaceImage[]>>
+  // 新增：按需加载工作区图片
+  loadWorkspaceImage: (
+    workspace: Tables<"workspaces">
+  ) => Promise<WorkspaceImage | null>
 
   // PRESET STORE
   selectedPreset: Tables<"presets"> | null
@@ -174,12 +182,18 @@ export const ChatbotUIContext = createContext<ChatbotUIContext>({
   setAvailableLocalModels: () => {},
   availableOpenRouterModels: [],
   setAvailableOpenRouterModels: () => {},
+  // 新增：模型加载状态和函数
+  modelsLoaded: false,
+  modelsLoading: false,
+  loadModelsIfNeeded: async () => {},
 
   // WORKSPACE STORE
   selectedWorkspace: null,
   setSelectedWorkspace: () => {},
   workspaceImages: [],
   setWorkspaceImages: () => {},
+  // 新增：按需加载工作区图片
+  loadWorkspaceImage: async () => null,
 
   // PRESET STORE
   selectedPreset: null,
