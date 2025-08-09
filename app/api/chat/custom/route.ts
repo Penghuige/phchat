@@ -1,7 +1,6 @@
 import { Database } from "@/supabase/types"
 import { ChatSettings } from "@/types"
 import { createClient } from "@supabase/supabase-js"
-import { OpenAIStream, StreamingTextResponse } from "ai"
 import { ServerRuntime } from "next"
 import OpenAI from "openai"
 import { ChatCompletionCreateParamsBase } from "openai/resources/chat/completions.mjs"
@@ -44,9 +43,31 @@ export async function POST(request: Request) {
       stream: true
     })
 
-    const stream = OpenAIStream(response)
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const part of response as any) {
+            const content = part?.choices?.[0]?.delta?.content
+            if (content) {
+              controller.enqueue(new TextEncoder().encode(content))
+            }
+            const finish = part?.choices?.[0]?.finish_reason
+            if (finish) {
+              controller.close()
+              break
+            }
+          }
+        } catch (err) {
+          controller.error(err)
+        }
+      }
+    })
 
-    return new StreamingTextResponse(stream)
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8"
+      }
+    })
   } catch (error: any) {
     let errorMessage = error.message || "An unexpected error occurred"
     const errorCode = error.status || 500

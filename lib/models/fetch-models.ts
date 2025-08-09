@@ -5,14 +5,16 @@ import { LLM_LIST_MAP } from "./llm/llm-list"
 
 export const fetchHostedModels = async (profile: Tables<"profiles">) => {
   try {
-    // 只保留需要的AI服务
     const providers = [
-      "google", // Google Gemini
-      "zhipu", // 智谱AI
-      "deepseek" // DeepSeek
+      "google",
+      "anthropic",
+      "mistral",
+      "groq",
+      "perplexity",
+      "zhipu",
+      "deepseek"
     ]
 
-    // 根据配置决定是否使用Azure OpenAI或普通OpenAI
     if (profile.use_azure_openai) {
       providers.push("azure")
     } else {
@@ -58,7 +60,32 @@ export const fetchHostedModels = async (profile: Tables<"profiles">) => {
   }
 }
 
-// 删除fetchOllamaModels函数 - 不再支持本地模型
+export const fetchOllamaModels = async () => {
+  try {
+    const response = await fetch(
+      process.env.NEXT_PUBLIC_OLLAMA_URL + "/api/tags"
+    )
+
+    if (!response.ok) {
+      throw new Error(`Ollama server is not responding.`)
+    }
+
+    const data = await response.json()
+
+    const localModels: LLM[] = data.models.map((model: any) => ({
+      modelId: model.name as LLMID,
+      modelName: model.name,
+      provider: "ollama",
+      hostedId: model.name,
+      platformLink: "https://ollama.ai/library",
+      imageInput: false
+    }))
+
+    return localModels
+  } catch (error) {
+    console.warn("Error fetching Ollama models: " + error)
+  }
+}
 
 export const fetchOpenRouterModels = async () => {
   try {

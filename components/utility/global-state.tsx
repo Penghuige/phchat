@@ -9,6 +9,7 @@ import { getWorkspacesByUserId } from "@/db/workspaces"
 import { convertBlobToBase64 } from "@/lib/blob-to-b64"
 import {
   fetchHostedModels,
+  fetchOllamaModels,
   fetchOpenRouterModels
 } from "@/lib/models/fetch-models"
 import { supabase } from "@/lib/supabase/browser-client"
@@ -57,10 +58,6 @@ export const GlobalState: FC<GlobalStateProps> = ({ children }) => {
     OpenRouterLLM[]
   >([])
 
-  // 添加模型加载状态
-  const [modelsLoaded, setModelsLoaded] = useState(false)
-  const [modelsLoading, setModelsLoading] = useState(false)
-
   // WORKSPACE STORE
   const [selectedWorkspace, setSelectedWorkspace] =
     useState<Tables<"workspaces"> | null>(null)
@@ -80,7 +77,7 @@ export const GlobalState: FC<GlobalStateProps> = ({ children }) => {
   const [userInput, setUserInput] = useState<string>("")
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [chatSettings, setChatSettings] = useState<ChatSettings>({
-    model: "gpt-4-turbo-preview",
+    model: "deepseek-reasoner",
     prompt: "You are a helpful AI assistant.",
     temperature: 0.5,
     contextLength: 4000,
@@ -126,57 +123,34 @@ export const GlobalState: FC<GlobalStateProps> = ({ children }) => {
   const [selectedTools, setSelectedTools] = useState<Tables<"tools">[]>([])
   const [toolInUse, setToolInUse] = useState<string>("none")
 
-  // 移除自动模型加载，改为按需加载
   useEffect(() => {
     ;(async () => {
-      // 只加载基础数据，不加载模型
-      await fetchStartingData()
+      const profile = await fetchStartingData()
+
+      if (profile) {
+        const hostedModelRes = await fetchHostedModels(profile)
+        if (!hostedModelRes) return
+
+        setEnvKeyMap(hostedModelRes.envKeyMap)
+        setAvailableHostedModels(hostedModelRes.hostedModels)
+
+        if (
+          profile["openrouter_api_key"] ||
+          hostedModelRes.envKeyMap["openrouter"]
+        ) {
+          const openRouterModels = await fetchOpenRouterModels()
+          if (!openRouterModels) return
+          setAvailableOpenRouterModels(openRouterModels)
+        }
+      }
+
+      if (process.env.NEXT_PUBLIC_OLLAMA_URL) {
+        const localModels = await fetchOllamaModels()
+        if (!localModels) return
+        setAvailableLocalModels(localModels)
+      }
     })()
   }, [])
-
-  // 新增：按需加载模型的函数
-  const loadModelsIfNeeded = async () => {
-    if (modelsLoaded || modelsLoading || !profile) return
-
-    setModelsLoading(true)
-    try {
-      // 并行加载所有模型，提高性能
-      const promises = []
-
-      // 加载托管模型
-      const hostedModelPromise = fetchHostedModels(profile).then(
-        hostedModelRes => {
-          if (hostedModelRes) {
-            setEnvKeyMap(hostedModelRes.envKeyMap)
-            setAvailableHostedModels(hostedModelRes.hostedModels)
-
-            // 如果有OpenRouter密钥，也加载OpenRouter模型
-            if (
-              profile["openrouter_api_key"] ||
-              hostedModelRes.envKeyMap["openrouter"]
-            ) {
-              return fetchOpenRouterModels().then(openRouterModels => {
-                if (openRouterModels) {
-                  setAvailableOpenRouterModels(openRouterModels)
-                }
-              })
-            }
-          }
-        }
-      )
-      promises.push(hostedModelPromise)
-
-      // 移除本地模型加载 - 不再支持Ollama
-      // 如果需要本地模型，可以重新启用相关代码
-
-      await Promise.all(promises)
-      setModelsLoaded(true)
-    } catch (error) {
-      console.warn("Error loading models:", error)
-    } finally {
-      setModelsLoading(false)
-    }
-  }
 
   const fetchStartingData = async () => {
     const session = (await supabase.auth.getSession()).data.session
@@ -184,22 +158,16 @@ export const GlobalState: FC<GlobalStateProps> = ({ children }) => {
     if (session) {
       const user = session.user
 
-      // 并行加载profile和workspaces，提高性能
-      const [profile, workspaces] = await Promise.all([
-        getProfileByUserId(user.id),
-        getWorkspacesByUserId(user.id)
-      ])
-
+      const profile = await getProfileByUserId(user.id)
       setProfile(profile)
-      setWorkspaces(workspaces)
 
       if (!profile.has_onboarded) {
         return router.push("/setup")
       }
 
-      // 图片懒加载：不在初始化时加载，改为按需加载
-      // 注释掉原来的同步图片加载逻辑
-      /*
+      const workspaces = await getWorkspacesByUserId(user.id)
+      setWorkspaces(workspaces)
+
       for (const workspace of workspaces) {
         let workspaceImageUrl = ""
 
@@ -224,42 +192,8 @@ export const GlobalState: FC<GlobalStateProps> = ({ children }) => {
           ])
         }
       }
-      */
 
       return profile
-    }
-  }
-
-  // 新增：按需加载工作区图片的函数
-  const loadWorkspaceImage = async (workspace: Tables<"workspaces">) => {
-    if (!workspace.image_path) return null
-
-    try {
-      const workspaceImageUrl = await getWorkspaceImageFromStorage(
-        workspace.image_path
-      )
-      if (!workspaceImageUrl) return null
-
-      const response = await fetch(workspaceImageUrl)
-      const blob = await response.blob()
-      const base64 = await convertBlobToBase64(blob)
-
-      const workspaceImage = {
-        workspaceId: workspace.id,
-        path: workspace.image_path,
-        base64: base64,
-        url: workspaceImageUrl
-      }
-
-      setWorkspaceImages(prev => [
-        ...prev.filter(img => img.workspaceId !== workspace.id), // 移除旧的
-        workspaceImage
-      ])
-
-      return workspaceImage
-    } catch (error) {
-      console.warn("Error loading workspace image:", error)
-      return null
     }
   }
 
@@ -301,18 +235,12 @@ export const GlobalState: FC<GlobalStateProps> = ({ children }) => {
         setAvailableLocalModels,
         availableOpenRouterModels,
         setAvailableOpenRouterModels,
-        // 新增：模型加载状态和函数
-        modelsLoaded,
-        modelsLoading,
-        loadModelsIfNeeded,
 
         // WORKSPACE STORE
         selectedWorkspace,
         setSelectedWorkspace,
         workspaceImages,
         setWorkspaceImages,
-        // 新增：按需加载工作区图片
-        loadWorkspaceImage,
 
         // PRESET STORE
         selectedPreset,
